@@ -1,0 +1,39 @@
+﻿@page "/"
+@inject IJSRuntime JSRuntime
+@implements IDisposable
+
+<h1>バーコードテスト</h1>
+
+<button @onclick="LaunchCamera" style="padding: 10px 20px; font-size: 16px; margin-bottom: 15px;">
+    カメラを起動する
+</button>
+
+<div id="reader" style="width: 100%; max-width: 500px; border: 1px solid #ccc; min-height: 300px;"></div>
+
+@code {
+    private DotNetObjectReference<Home>? objRef;
+
+    // 👇 ボタンが押されたら実行されるように変更
+    private async Task LaunchCamera()
+    {
+        objRef = DotNetObjectReference.Create(this);
+        try
+        {
+            // JavaScriptのカメラ起動関数を呼び出す
+            await JSRuntime.InvokeVoidAsync("startCamera", objRef);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"エラーが発生しました: {ex.Message}");
+        }
+    }
+
+    // バーコードを検知したらJSから呼ばれるC#の関数
+    [JSInvokable]
+    public async Task OnScan(string code)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", $"読み取り成功！\n値: {code}");
+    }
+
+    public void Dispose() => objRef?.Dispose();
+}
