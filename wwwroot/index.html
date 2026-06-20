@@ -32,10 +32,15 @@
     <script>
         window.beepSound = new Audio('beep.mp3');
         
-        // 🟢 連続スキャン時の連打防止フラグ
         let isScanningLocked = false;
 
         window.startCamera = (dotNetHelper) => {
+            if (typeof Html5Qrcode === 'undefined') {
+                console.warn("Html5Qrcode is not loaded yet. Retrying in 100ms...");
+                setTimeout(() => window.startCamera(dotNetHelper), 100);
+                return;
+            }
+
             window.beepSound.play()
                 .then(() => console.log("Audio unlocked!"))
                 .catch(err => console.log("Audio play blocked: ", err));
@@ -50,17 +55,12 @@
                     }
                 },
                 (text) => {
-                    // 🟢 連打防止ロックがかかっている場合は、処理をスルーする
                     if (isScanningLocked) return;
-
-                    // ロックをかける（2秒間は次のスキャンを無視）
                     isScanningLocked = true;
 
-                    // 音を鳴らしてC#にデータを渡す（★html5Qrcode.stop() は呼ばない！）
                     window.beepSound.play();
                     dotNetHelper.invokeMethodAsync('OnScan', text);
 
-                    // 2秒後にロックを解除して、次の本をスキャンできるようにする
                     setTimeout(() => {
                         isScanningLocked = false;
                     }, 2000); 
@@ -72,19 +72,28 @@
         };
     </script>
     <script>
-        function downloadCsv(fileName, csvContent) {
-            // Excelでの文字化けを防ぐため、BOM（UTF-8）を先頭に付与
-            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-            const blob = new Blob([bom, csvContent], { type: "text/csv;charset=utf-8;" });
-            const link = document.createElement("a");
-            
-            link.href = URL.createObjectURL(blob);
-            link.download = fileName;
-            link.style.display = "none";
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+        // GASにデータをフォーム形式で送りつける関数
+        function sendToGoogleSheets(url, dataObject) {
+            const params = new URLSearchParams();
+            params.append("isbn", dataObject.isbn || "");
+            params.append("title", dataObject.title || "");
+            params.append("author", dataObject.author || "");
+            params.append("publisher", dataObject.publisher || "");
+            params.append("pubDate", dataObject.pubDate || "");
+
+            return fetch(url, {
+                method: "POST",
+                mode: "no-cors", 
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: params.toString()
+            }).then(response => {
+                return true; 
+            }).catch(error => {
+                console.error("Fetch error:", error);
+                return false;
+            });
         }
     </script>
 

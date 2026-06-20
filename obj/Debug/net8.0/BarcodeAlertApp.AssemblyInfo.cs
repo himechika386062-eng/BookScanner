@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("BarcodeAlertApp")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+39fa96ecab6b0f186c215291bd1ca4bd02d1f694")]
 [assembly: System.Reflection.AssemblyProductAttribute("BarcodeAlertApp")]
 [assembly: System.Reflection.AssemblyTitleAttribute("BarcodeAlertApp")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

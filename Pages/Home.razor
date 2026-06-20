@@ -1,16 +1,18 @@
 ﻿@page "/"
 @using System.Text.RegularExpressions
 @using System.Text
+@using System.Net.Http.Json
 @inject IJSRuntime JSRuntime
 @inject HttpClient Http
 @implements IDisposable
 
 <div class="container py-4" style="max-width: 600px;">
+
     <div class="text-center mb-4">
         <h1 class="display-6 font-weight-bold text-success" style="letter-spacing: 1px;">
-            <i class="bi bi-barcode"></i> BookScanner
+            <i class="bi bi-google"></i> SheetScanner
         </h1>
-        <p class="text-muted small">ブラウザ完結型・CSV書籍登録システム</p>
+        <p class="text-muted small">Googleスプレッドシート・リアルタイム書籍登録システム</p>
     </div>
 
     <div class="alert @statusClass shadow-sm border-0 text-center mb-4 py-3" style="border-radius: 12px; font-size: 16px; transition: all 0.3s ease;">
@@ -24,11 +26,8 @@
     @if (scannedBooks.Count > 0)
     {
         <div class="d-flex gap-2 justify-content-center mb-4 animate-fade-in">
-            <button class="btn btn-success shadow-sm px-4 py-2" style="border-radius: 10px; font-weight: 600;" @onclick="DownloadAsCsv">
-                <i class="bi bi-download"></i> CSVをダウンロード (@scannedBooks.Count 冊)
-            </button>
             <button class="btn btn-outline-danger shadow-sm px-3 py-2" style="border-radius: 10px; font-weight: 600;" @onclick="ClearList">
-                <i class="bi bi-trash"></i> リストを空にする
+                <i class="bi bi-trash"></i> 画面のリストを空にする
             </button>
         </div>
     }
@@ -39,7 +38,7 @@
             <div style="height: 6px; background: linear-gradient(90deg, #198754, #20c997);"></div>
             <div class="card-body p-3">
                 <span class="badge bg-success-soft text-success px-3 py-2 rounded-pill small mb-2" style="background-color: rgba(25, 135, 84, 0.1); font-weight: 600;">
-                    スキャン済み書籍一覧
+                    今回スキャンした書籍（シート自動保存済み）
                 </span>
                 <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
                     <table class="table table-hover align-middle" style="font-size: 14px;">
@@ -70,12 +69,15 @@
 @code {
     private DotNetObjectReference<Home>? objRef;
     private List<BookSummary> scannedBooks = new();
-    private HashSet<string> scannedIsbns = new(); // 重複スキャン防止用
+    private HashSet<string> scannedIsbns = new(); 
     
     private string statusMessage = "カメラの起動を準備中...";
     private string statusClass = "alert-secondary";
     private string lastScannedIsbn = "";
     private DateTime lastScanTime = DateTime.MinValue;
+
+    // 🛑 取得したGoogle Apps Scriptの「ウェブアプリURL」
+    private const string GoogleSheetsWebhookUrl = "https://script.google.com/macros/s/AKfycbyypuNOTVy9_CzFoOHjWPMN2JvlrhlEVIMDkQDcMvILwlbeQydKI-oYjQMTld_A4v4l/exec";
 
     protected override async Task OnInitializedAsync()
     {
@@ -105,7 +107,6 @@
     [JSInvokable]
     public async Task OnScan(string code)
     {
-        // 連続スキャンのチャタリング防止ロック（2秒間は同じISBNを受け付けない）
         if (code == lastScannedIsbn && (DateTime.Now - lastScanTime).TotalSeconds < 2)
         {
             return;
@@ -124,10 +125,9 @@
             lastScannedIsbn = code;
             lastScanTime = DateTime.Now;
 
-            // すでにスキャン済みの本ならスキップ
             if (scannedIsbns.Contains(code))
             {
-                statusMessage = "💡 その本はすでにリストに追加されています。";
+                statusMessage = "💡 その本はすでにこの画面のリストに追加されています。";
                 statusClass = "alert-info text-info fw-bold";
                 StateHasChanged();
                 return;
@@ -137,23 +137,43 @@
             statusClass = "alert-light text-muted shadow-sm";
             StateHasChanged();
 
-            // OpenBD APIから書籍情報を取得（ここは公開APIなのでCORSエラーは起きません）
             var apiResponse = await Http.GetFromJsonAsync<OpenBdResponse[]>($"https://api.openbd.jp/v1/get?isbn={code}");
             
             if (apiResponse != null && apiResponse.Length > 0 && apiResponse[0] != null && apiResponse[0].Summary != null)
             {
                 var summary = apiResponse[0].Summary;
                 
-                // 著者名に含まれる余計な生没年データなどを正規表現でクレンジング
                 summary.Author = Regex.Replace(summary.Author, @",?\s*\d+-\s*", "");
                 summary.PubDate = FormatPubDate(summary.PubDate);
 
-                // メモリ上のリストに追加
-                scannedBooks.Add(summary);
-                scannedIsbns.Add(code);
+                statusMessage = $"📤 Googleスプレッドシートへ保存中：『{summary.Title}』";
+                statusClass = "alert-light text-success fw-bold shadow-sm";
+                StateHasChanged();
 
-                statusMessage = $"🎉 追加しました：『{summary.Title}』";
-                statusClass = "alert-success text-success fw-bold shadow-sm";
+                var payload = new
+                {
+                    isbn = summary.Isbn,
+                    title = summary.Title,
+                    author = summary.Author,
+                    publisher = summary.Publisher,
+                    pubDate = summary.PubDate
+                };
+
+                var isSuccess = await JSRuntime.InvokeAsync<bool>("sendToGoogleSheets", GoogleSheetsWebhookUrl, payload);
+
+                if (isSuccess)
+                {
+                    scannedBooks.Add(summary);
+                    scannedIsbns.Add(code);
+
+                    statusMessage = $"✅ シートへ送信完了：『{summary.Title}』";
+                    statusClass = "alert-success text-success fw-bold shadow-sm";
+                }
+                else
+                {
+                    statusMessage = "❌ スプレッドシートへの送信に失敗しました。";
+                    statusClass = "alert-danger text-danger fw-bold";
+                }
             }
             else
             {
@@ -171,37 +191,12 @@
         }
     }
 
-    // 🟢 リストをCSVにしてブラウザ経由でダウンロードさせる処理
-    private async Task DownloadAsCsv()
-    {
-        var csv = new StringBuilder();
-        // ヘッダー行
-        csv.AppendLine("ISBN,タイトル,著者,出版社,出版年");
-
-        // データ行
-        foreach (var book in scannedBooks)
-        {
-            // CSVのカンマ誤作動を防ぐため、値をダブルクォーテーションで囲む
-            csv.AppendLine($"\"{book.Isbn}\",\"{EscapeForCsv(book.Title)}\",\"{EscapeForCsv(book.Author)}\",\"{EscapeForCsv(book.Publisher)}\",\"{EscapeForCsv(book.PubDate)}\"");
-        }
-
-        var fileName = $"book_list_{DateTime.Now:yyyyMMddHHmmss}.csv";
-        
-        // JavaScript関数を呼び出してダウンロードを発火
-        await JSRuntime.InvokeVoidAsync("downloadCsv", fileName, csv.ToString());
-    }
-
     private void ClearList()
     {
         scannedBooks.Clear();
         scannedIsbns.Clear();
-        statusMessage = "リストを空にしました。新しいスキャンを行えます。";
+        statusMessage = "画面の表示をリセットしました（スプレッドシートのデータは消えません）。";
         statusClass = "alert-info text-info";
-    }
-
-    private string EscapeForCsv(string value)
-    {
-        return value.Replace("\"", "\"\"");
     }
 
     private string FormatPubDate(string rawDate)
@@ -212,28 +207,4 @@
     }
 
     public void Dispose() => objRef?.Dispose();
-
-    public class OpenBdResponse
-    {
-        [System.Text.Json.Serialization.JsonPropertyName("summary")]
-        public BookSummary? Summary { get; set; }
-    }
-
-    public class BookSummary
-    {
-        [System.Text.Json.Serialization.JsonPropertyName("isbn")]
-        public string Isbn { get; set; } = "";
-
-        [System.Text.Json.Serialization.JsonPropertyName("title")]
-        public string Title { get; set; } = "";
-
-        [System.Text.Json.Serialization.JsonPropertyName("author")]
-        public string Author { get; set; } = "";
-
-        [System.Text.Json.Serialization.JsonPropertyName("publisher")]
-        public string Publisher { get; set; } = "";
-
-        [System.Text.Json.Serialization.JsonPropertyName("pubdate")]
-        public string PubDate { get; set; } = "";
-    }
 }
