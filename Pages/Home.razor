@@ -33,31 +33,37 @@
     {
         try
         {
-            // 🟢 1. まずSupabaseに同じバーコードが存在するか検索する
+            // 🟢 【改善ポイント】まずは978から始まるかどうかを「一番最初」にチェックする
+            if (!code.StartsWith("978"))
+            {
+                // 978以外（下側のコードなど）が読まれてしまったら、警告を出して処理を抜ける
+                await JSRuntime.InvokeVoidAsync("alert", "本の上のバーコード（978から始まるコード）を枠に合わせてください。");
+                return;
+            }
+
+            // 1. 978確定なので、Supabaseに同じバーコードが存在するか検索する
             var response = await SupabaseClient
                 .From<BarcodeModel>()
                 .Where(x => x.Code == code)
                 .Get();
 
-            // 🟢 2. すでに登録されているかどうかの条件分岐
+            // 2. すでに登録されているかどうかの条件分岐
             if (response.Models.Count > 0)
             {
-                // 【重複あり】過去に登録されているので警告を出す（保存はしない）
-                await JSRuntime.InvokeVoidAsync("alert", $"⚠️ 警告：すでに登録されています！\n値: {code}");
+                // 【重複あり】
+                await JSRuntime.InvokeVoidAsync("alert", $"⚠️ 警告：この本はすでに登録されています！\n値: {code}");
             }
             else
             {
-                // 【重複なし】まだ登録されていないので、新しく保存する
+                // 【重複なし】
                 var newBarcode = new BarcodeModel
                 {
                     Code = code
                 };
 
-                // Supabaseの「barcodes」テーブルに保存
                 await SupabaseClient.From<BarcodeModel>().Insert(newBarcode);
                 
-                // 成功ポップアップを表示
-                await JSRuntime.InvokeVoidAsync("alert", $"新規登録成功！\n値: {code}");
+                await JSRuntime.InvokeVoidAsync("alert", $"本を新しく登録しました！\n値: {code}");
                 Console.WriteLine($"Supabaseへの新規保存に成功しました: {code}");
             }
         }
