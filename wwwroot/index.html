@@ -31,23 +31,25 @@
 
     <script>
         // 音声オブジェクトを作成
-        window.beepSound = new Audio('./beep.mp3');
+        window.beepSound = new Audio('beep.mp3');
 
         window.startCamera = (dotNetHelper) => {
-            // 🟢 【超重要】ボタンを押したこの瞬間に、実際に「ピッ」と音を鳴らしきる！
-            // これにより、Android Chromeのオーディオ再生制限が完全に解除されます。
             window.beepSound.play()
-                .then(() => console.log("Audio unlocked by playing sound!"))
+                .then(() => console.log("Audio unlocked!"))
                 .catch(err => console.log("Audio play blocked: ", err));
 
             const html5Qrcode = new Html5Qrcode("reader");
             html5Qrcode.start(
                 { facingMode: "environment" }, 
-                { fps: 10, qrbox: 250 },
+                { 
+                    fps: 10, 
+                    // 🟢 ここを修正：真四角の「250」から「横長のサイズ指定」に変更
+                    qrbox: (viewfinderWidth, viewfinderHeight) => {
+                        return { width: 280, height: 80 };
+                    }
+                },
                 (text) => {
-                    // 🟢 ロックが解除されているので、バーコード検知時も確実に鳴るようになります
                     window.beepSound.play();
-
                     dotNetHelper.invokeMethodAsync('OnScan', text);
                     html5Qrcode.stop();
                 },
