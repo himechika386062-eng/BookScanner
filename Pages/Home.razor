@@ -1,40 +1,66 @@
 ﻿@page "/"
-@using System.Text.RegularExpressions // 🟢 これが足りていなかったため追加
+@using System.Text.RegularExpressions
 @inject IJSRuntime JSRuntime
 @inject Supabase.Client SupabaseClient
 @inject HttpClient Http
 @implements IDisposable
 
-<h1>連続書籍チェッカー</h1>
-
-<div class="alert @statusClass mt-2" style="max-width: 500px; font-weight: bold;">
-    @statusMessage
-</div>
-
-<div id="reader" style="width: 100%; max-width: 500px; border: 1px solid #ccc; min-height: 300px;"></div>
-
-@if (scannedBook != null)
-{
-    <div class="card mt-3" style="max-width: 500px; padding: 20px; border-left: 5px solid #0d6efd;">
-        <div class="card-body p-0">
-            <h4 class="card-title" style="font-weight: bold; margin-bottom: 15px; color: #333;">
-                @scannedBook.Title
-            </h4>
-            <ul class="list-unstyled" style="font-size: 15px; margin: 0; padding: 0;">
-                <li style="margin-bottom: 8px;"><strong>著者：</strong> @scannedBook.Author</li>
-                <li style="margin-bottom: 8px;"><strong>出版社：</strong> @scannedBook.Publisher</li>
-                <li><strong>出版年月：</strong> @FormatPubDate(scannedBook.PubDate)</li>
-            </ul>
-        </div>
+<div class="container py-4" style="max-width: 600px;">
+    <div class="text-center mb-4">
+        <h1 class="display-6 font-weight-bold text-primary" style="letter-spacing: 1px;">
+            <i class="bi bi-barcode"></i> BookScanner Pro
+        </h1>
+        <p class="text-muted small">AI書籍検知 ＆ 重複チェックシステム</p>
     </div>
-}
+
+    <div class="alert @statusClass shadow-sm border-0 text-center mb-4 py-3" style="border-radius: 12px; font-size: 16px; transition: all 0.3s ease;">
+        @statusMessage
+    </div>
+
+    <div class="position-relative overflow-hidden shadow-lg mx-auto mb-4" style="border-radius: 20px; max-width: 500px; border: 4px solid #fff;">
+        <div id="reader" style="width: 100%; min-height: 280px; background-color: #222;"></div>
+    </div>
+
+    @if (scannedBook != null)
+    {
+        <div class="card border-0 shadow-lg mt-4 animate-fade-in" style="border-radius: 18px; overflow: hidden; background: #ffffff;">
+            <div style="height: 6px; background: linear-gradient(90deg, #0d6efd, #0dcaf0);"></div>
+            <div class="card-body p-4">
+                <span class="badge bg-primary-soft text-primary px-3 py-2 rounded-pill small mb-3" style="background-color: rgba(13, 110, 253, 0.1); font-weight: 600;">
+                    最新のスキャン結果
+                </span>
+                
+                <h3 class="card-title h5 font-weight-bold mb-3" style="color: #2b303a; line-height: 1.4;">
+                    @scannedBook.Title
+                </h3>
+                
+                <hr style="border-color: #f1f3f5;">
+                
+                <div class="row g-3" style="font-size: 15px; color: #495057;">
+                    <div class="col-12">
+                        <span class="text-muted small d-block">著者</span>
+                        <strong style="color: #212529;">@scannedBook.Author</strong>
+                    </div>
+                    <div class="col-6">
+                        <span class="text-muted small d-block">出版社</span>
+                        <span style="font-weight: 500;">@scannedBook.Publisher</span>
+                    </div>
+                    <div class="col-6">
+                        <span class="text-muted small d-block">出版年</span>
+                        <span style="font-weight: 500;">@FormatPubDate(scannedBook.PubDate)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
 
 @code {
     private DotNetObjectReference<Home>? objRef;
     private BookSummary? scannedBook;
     
-    private string statusMessage = "カメラを起動中...";
-    private string statusClass = "alert-info";
+    private string statusMessage = "カメラの起動を準備中...";
+    private string statusClass = "alert-secondary";
 
     protected override async Task OnInitializedAsync()
     {
@@ -48,13 +74,14 @@
             try
             {
                 await JSRuntime.InvokeVoidAsync("startCamera", objRef);
-                statusMessage = "バーコードを枠に合わせてください（連続スキャン有効）";
+                statusMessage = "バーコードを上の枠線に合わせてください";
+                statusClass = "alert-info text-info";
                 StateHasChanged();
             }
             catch (Exception ex)
             {
                 statusMessage = $"カメラ起動エラー: {ex.Message}";
-                statusClass = "alert-danger";
+                statusClass = "alert-danger text-danger";
                 StateHasChanged();
             }
         }
@@ -67,20 +94,20 @@
         {
             if (!code.StartsWith("978"))
             {
-                statusMessage = "⚠️ 本の上のバーコード（978〜）を狙ってください。";
-                statusClass = "alert-warning";
+                statusMessage = "⚠️ 本の上側のバーコード（978〜）を狙ってください。";
+                statusClass = "alert-warning text-warning fw-bold";
                 StateHasChanged();
                 return;
             }
 
-            statusMessage = "書籍情報を検索中...";
-            statusClass = "alert-info";
+            statusMessage = "🔄 データベースを照合中...";
+            statusClass = "alert-light text-muted shadow-sm";
             StateHasChanged();
 
             var apiResponse = await Http.GetFromJsonAsync<OpenBdResponse[]>($"https://api.openbd.jp/v1/get?isbn={code}");
             
             string bookTitle = "不明な書籍";
-            string cleanAuthor = "不明な著者"; // 🟢 定義場所をここに修正
+            string cleanAuthor = "不明な著者";
 
             if (apiResponse != null && apiResponse.Length > 0 && apiResponse[0] != null)
             {
@@ -88,22 +115,19 @@
                 if (scannedBook != null)
                 {
                     bookTitle = scannedBook.Title;
-                    
-                    // 生年表記（,1965- など）を綺麗にカット
                     cleanAuthor = Regex.Replace(scannedBook.Author, @",?\s*\d+-\s*", "");
                     scannedBook.Author = cleanAuthor; 
                 }
             }
             else
             {
-                statusMessage = "❌ 書籍情報が見つかりませんでした。";
-                statusClass = "alert-warning";
+                statusMessage = "❌ 書籍情報がデータベースに見つかりません。";
+                statusClass = "alert-warning text-warning fw-bold";
                 scannedBook = null;
                 StateHasChanged();
                 return;
             }
 
-            // Supabaseに同じバーコードが存在するか検索
             var response = await SupabaseClient
                 .From<BarcodeModel>()
                 .Where(x => x.Code == code)
@@ -111,12 +135,11 @@
 
             if (response.Models.Count > 0)
             {
-                statusMessage = $"⚠️ 重複警告：『{bookTitle}』は既に登録されています！";
-                statusClass = "alert-danger";
+                statusMessage = $"🛑 重複：『{bookTitle}』はすでに登録済みです！";
+                statusClass = "alert-danger bg-danger text-white fw-bold shadow";
             }
             else
             {
-                // 【重複なし】Supabaseに保存
                 var newBarcode = new BarcodeModel
                 {
                     Code = code,
@@ -128,8 +151,8 @@
 
                 await SupabaseClient.From<BarcodeModel>().Insert(newBarcode);
                 
-                statusMessage = $"🎉 新規登録成功：『{bookTitle}』を保存しました！";
-                statusClass = "alert-success";
+                statusMessage = $"✨ 新規登録：『{bookTitle}』を保存しました！";
+                statusClass = "alert-success bg-success text-white fw-bold shadow";
             }
 
             StateHasChanged();
@@ -137,7 +160,7 @@
         catch (Exception ex)
         {
             statusMessage = $"エラーが発生: {ex.Message}";
-            statusClass = "alert-danger";
+            statusClass = "alert-danger text-danger fw-bold";
             StateHasChanged();
         }
     }
