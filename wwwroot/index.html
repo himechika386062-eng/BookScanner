@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 
 <head>
     <meta charset="utf-8" />
@@ -30,12 +30,27 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
 
     <script>
+        // グローバルに音声ファイルを保持（wwwroot直下のbeep.mp3）
+        window.beepSound = new Audio('beep.mp3');
+
         window.startCamera = (dotNetHelper) => {
+            // 🟢 ユーザーがボタンを押した瞬間にAndroidのオーディオロックを解除
+            window.beepSound.play().then(() => {
+                window.beepSound.pause();
+                window.beepSound.currentTime = 0;
+                console.log("Audio unlocked!");
+            }).catch(err => {
+                console.log("Audio unlock failed: ", err);
+            });
+
             const html5Qrcode = new Html5Qrcode("reader");
             html5Qrcode.start(
                 { facingMode: "environment" }, 
                 { fps: 10, qrbox: 250 },
                 (text) => {
+                    // 🟢 バーコード検知：ここで即座に音を鳴らす！
+                    window.beepSound.play();
+
                     dotNetHelper.invokeMethodAsync('OnScan', text);
                     html5Qrcode.stop();
                 },
