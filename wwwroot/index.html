@@ -30,25 +30,22 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
 
     <script>
-        // グローバルに音声ファイルを保持（wwwroot直下のbeep.mp3）
+        // 音声オブジェクトを作成
         window.beepSound = new Audio('beep.mp3');
 
         window.startCamera = (dotNetHelper) => {
-            // 🟢 ユーザーがボタンを押した瞬間にAndroidのオーディオロックを解除
-            window.beepSound.play().then(() => {
-                window.beepSound.pause();
-                window.beepSound.currentTime = 0;
-                console.log("Audio unlocked!");
-            }).catch(err => {
-                console.log("Audio unlock failed: ", err);
-            });
+            // 🟢 【超重要】ボタンを押したこの瞬間に、実際に「ピッ」と音を鳴らしきる！
+            // これにより、Android Chromeのオーディオ再生制限が完全に解除されます。
+            window.beepSound.play()
+                .then(() => console.log("Audio unlocked by playing sound!"))
+                .catch(err => console.log("Audio play blocked: ", err));
 
             const html5Qrcode = new Html5Qrcode("reader");
             html5Qrcode.start(
                 { facingMode: "environment" }, 
                 { fps: 10, qrbox: 250 },
                 (text) => {
-                    // 🟢 バーコード検知：ここで即座に音を鳴らす！
+                    // 🟢 ロックが解除されているので、バーコード検知時も確実に鳴るようになります
                     window.beepSound.play();
 
                     dotNetHelper.invokeMethodAsync('OnScan', text);
