@@ -3,15 +3,25 @@ using Postgrest.Models;
 
 namespace BarcodeAlertApp
 {
-    // Supabaseの「barcodes」テーブルと紐付け
     [Table("barcodes")]
     public class BarcodeModel : BaseModel
     {
         [PrimaryKey("id", false)]
         public int Id { get; set; }
 
-        // バーコードの数値を保存する列
         [Column("code")]
-        public string Code { get; set; }
+        public string Code { get; set; } = "";
+
+        [Column("title")]
+        public string Title { get; set; } = "";
+
+        [Column("author")]
+        public string Author { get; set; } = "";
+
+        [Column("publisher")]
+        public string Publisher { get; set; } = "";
+
+        [Column("pubdate")]
+        public string PubDate { get; set; } = "";
     }
 }

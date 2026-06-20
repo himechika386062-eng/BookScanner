@@ -22,7 +22,7 @@ namespace BarcodeAlertApp
         [JsonPropertyName("publisher")]
         public string Publisher { get; set; } = "";
 
-        [JsonPropertyName("cover")]
-        public string Cover { get; set; } = ""; // 表紙画像のURL
+        [JsonPropertyName("pubdate")]
+        public string PubDate { get; set; } = "";
     }
 }
