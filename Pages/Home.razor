@@ -1,6 +1,6 @@
 ﻿@page "/"
 @inject IJSRuntime JSRuntime
-@inject Supabase.Client SupabaseClient // 🟢 Supabaseをこの画面で使えるように追加
+@inject Supabase.Client SupabaseClient // Supabaseをこの画面で使えるように追加
 @implements IDisposable
 
 <h1>バーコードテスト</h1>
@@ -27,30 +27,44 @@
         }
     }
 
-    // 🟢 バーコードを検知したらJSから呼ばれるC#の関数（ここにSupabase保存を追加）
+    // バーコードを検知したらJSから呼ばれるC#の関数
     [JSInvokable]
     public async Task OnScan(string code)
     {
-        // 1. まずは画面に通知を出す
-        await JSRuntime.InvokeVoidAsync("alert", $"読み取り成功！\n値: {code}");
-
         try
         {
-            // 2. 保存するデータのモデルを作成
-            var newBarcode = new BarcodeModel
-            {
-                Code = code
-            };
+            // 🟢 1. まずSupabaseに同じバーコードが存在するか検索する
+            var response = await SupabaseClient
+                .From<BarcodeModel>()
+                .Where(x => x.Code == code)
+                .Get();
 
-            // 3. Supabaseの「barcodes」テーブルに保存！
-            await SupabaseClient.From<BarcodeModel>().Insert(newBarcode);
-            
-            Console.WriteLine($"Supabaseへの保存に成功しました: {code}");
+            // 🟢 2. すでに登録されているかどうかの条件分岐
+            if (response.Models.Count > 0)
+            {
+                // 【重複あり】過去に登録されているので警告を出す（保存はしない）
+                await JSRuntime.InvokeVoidAsync("alert", $"⚠️ 警告：すでに登録されています！\n値: {code}");
+            }
+            else
+            {
+                // 【重複なし】まだ登録されていないので、新しく保存する
+                var newBarcode = new BarcodeModel
+                {
+                    Code = code
+                };
+
+                // Supabaseの「barcodes」テーブルに保存
+                await SupabaseClient.From<BarcodeModel>().Insert(newBarcode);
+                
+                // 成功ポップアップを表示
+                await JSRuntime.InvokeVoidAsync("alert", $"新規登録成功！\n値: {code}");
+                Console.WriteLine($"Supabaseへの新規保存に成功しました: {code}");
+            }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Supabaseへの保存中にエラーが発生: {ex.Message}");
-            await JSRuntime.InvokeVoidAsync("alert", $"DB保存エラー: {ex.Message}");
+            Console.WriteLine($"エラーが発生: {ex.Message}");
+            await JSRuntime.InvokeVoidAsync("alert", $"エラー: {ex.Message}");
         }
     }
 
