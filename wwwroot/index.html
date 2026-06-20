@@ -28,12 +28,17 @@
     </div>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
+    
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 
     <script>
         window.beepSound = new Audio('beep.mp3');
-        
         let isScanningLocked = false;
+        let tokenClient;
+        let accessToken = null; // 🔑 Google APIを叩くためのトークンを保管する変数
+        let dotNetInstance = null;
 
+        // 💡 カメラ起動（Safari遅延対策入り）
         window.startCamera = (dotNetHelper) => {
             if (typeof Html5Qrcode === 'undefined') {
                 console.warn("Html5Qrcode is not loaded yet. Retrying in 100ms...");
@@ -50,9 +55,7 @@
                 { facingMode: "environment" }, 
                 { 
                     fps: 10, 
-                    qrbox: (viewfinderWidth, viewfinderHeight) => {
-                        return { width: 280, height: 80 };
-                    }
+                    qrbox: (viewfinderWidth, viewfinderHeight) => { return { width: 280, height: 80 }; }
                 },
                 (text) => {
                     if (isScanningLocked) return;
@@ -61,40 +64,85 @@
                     window.beepSound.play();
                     dotNetHelper.invokeMethodAsync('OnScan', text);
 
-                    setTimeout(() => {
-                        isScanningLocked = false;
-                    }, 2000); 
+                    setTimeout(() => { isScanningLocked = false; }, 2000); 
                 },
                 (err) => { /* エラー無視 */ }
             ).catch(err => {
                 alert("カメラの起動に失敗しました: " + err);
             });
         };
-    </script>
-    <script>
-        // GASにデータをフォーム形式で送りつける関数
-        function sendToGoogleSheets(url, dataObject) {
-            const params = new URLSearchParams();
-            params.append("isbn", dataObject.isbn || "");
-            params.append("title", dataObject.title || "");
-            params.append("author", dataObject.author || "");
-            params.append("publisher", dataObject.publisher || "");
-            params.append("pubDate", dataObject.pubDate || "");
 
-            return fetch(url, {
-                method: "POST",
-                mode: "no-cors", 
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded"
+        // 🟢 Google認証の初期化とログイン処理
+        window.initGoogleAuth = (dotNetHelper, clientId) => {
+            dotNetInstance = dotNetHelper;
+
+            // ユーザーに要求する権限（スプレッドシートの作成・編集権限）
+            const scopes = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: scopes,
+                callback: (tokenResponse) => {
+                    if (tokenResponse && tokenResponse.access_token) {
+                        accessToken = tokenResponse.access_token;
+                        // ログイン成功とトークンをC#側に通知
+                        dotNetInstance.invokeMethodAsync('OnGoogleLoginSuccess', accessToken);
+                    }
                 },
-                body: params.toString()
-            }).then(response => {
-                return true; 
-            }).catch(error => {
-                console.error("Fetch error:", error);
-                return false;
+                error_callback: (err) => {
+                    console.error("Google Auth Error:", err);
+                    alert("Googleログイン中にエラーが発生しました。");
+                }
             });
-        }
+        };
+
+        // 🟢 ログイン画面（ポップアップ）を開く関数
+        window.requestGoogleLogin = () => {
+            if (tokenClient) {
+                // 既存のトークンをクリアして新しく認証を求める
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            }
+        };
+
+        // 🟢 GASの代わりに、直接Google Sheets APIを叩いてユーザーのシートに追記する関数
+        window.sendToGoogleSheetsDirect = async (spreadsheetId, dataObject) => {
+            if (!accessToken) {
+                console.error("No access token found.");
+                return false;
+            }
+
+            // Google Sheets API の行追加URL（シートの一番左のタブ「A1:F1」の範囲に向けてデータを追記）
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A1:append?valueInputOption=USER_ENTERED`;
+
+            // 送信する行データの組み立て（日時、ISBN、タイトル、著者、出版社、出版年）
+            const timestamp = new Date().toLocaleString("ja-JP");
+            const rowValues = [[
+                dataObject.title || "",
+                dataObject.author || "",
+                dataObject.publisher || "",
+                dataObject.pubDate || "",
+                dataObject.isbn || "",
+                timestamp
+            ]];
+
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`, // 🔑 ユーザーから貰った鍵を添える
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        values: rowValues
+                    })
+                });
+
+                return response.ok;
+            } catch (error) {
+                console.error("Google Sheets API Error:", error);
+                return false;
+            }
+        };
     </script>
 
     <script src="_framework/blazor.webassembly.js"></script>
