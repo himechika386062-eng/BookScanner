@@ -118,8 +118,8 @@
                     type: "LiveStream",
                     target: targetElement,
                     constraints: {
-                        width: 640,
-                        height: 480,
+                        width: { min: 640, ideal: 1280 },
+                        height: { min: 480, ideal: 720 },
                         facingMode: "environment" // 背面カメラを優先
                     },
                 },
