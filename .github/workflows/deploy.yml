@@ -15,8 +15,7 @@ jobs:
       with:
         dotnet-version: 8.0.x
 
-    - name: Change base-tag in index.html to repository name
-      run: sed -i 's/<base href="\/" \/>/<base href="\/BarcodeAlertApp\/" \/>/g' wwwroot/index.html
+    # 💡 Cloudflare用にURLを「/」のままにするため、ここにあったsedコマンドのステップを削除しました。
 
     - name: Publish Website
       run: dotnet publish BarcodeAlertApp.csproj -c Release -o release
