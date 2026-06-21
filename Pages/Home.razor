@@ -18,6 +18,12 @@
         @statusMessage
     </div>
 
+    <div class="text-center mt-4 border-top pt-3">
+        <p class="text-muted m-0" style="font-size: 12px; line-height: 1.5;">
+            本のバーコード（ISBN）をスキャンし、あなたのGoogleスプレッドシートに蔵書データを転送・保存するツールです。
+        </p>
+    </div>
+
     @if (isLoggedIn && hasLinkedSheet)
     {
         <div class="alert alert-success p-2 mb-3 shadow-sm" style="border-radius: 8px; border: none; background-color: #e2f0d9;">
@@ -98,11 +104,6 @@
                 </div>
             </div>
         }
-        <div class="text-center mt-4 border-top pt-3">
-        <p class="text-muted m-0" style="font-size: 12px; line-height: 1.5;">
-            本のバーコード（ISBN）をスキャンし、あなたのGoogleスプレッドシートに蔵書データを転送・保存するツールです。
-        </p>
-    </div>
     }
 </div>
 
@@ -164,7 +165,7 @@
 
     private async Task LoadExistingIsbns()
     {
-        statusMessage = "📚 過去の同期データをスプレッドシートから読み込んでいます...";
+        statusMessage = "過去の同期データをスプレッドシートから読み込んでいます...";
         StateHasChanged();
 
         try
