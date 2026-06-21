@@ -409,7 +409,7 @@
                     {
                         Isbn = code,
                         Title = title,
-                        Author = summary.GetProperty("author").GetString() ?? "不明な著者",
+                        Author = CleanAuthorName(summary.GetProperty("author").GetString()),
                         Publisher = summary.GetProperty("publisher").GetString() ?? "不明な出版社",
                         PubYear = formattedYear
                     };
@@ -441,6 +441,21 @@
             isProcessing = false; 
         }
         StateHasChanged();
+    }
+
+    // 🟢 追加：著者名から「,1965-」や「, 1965-」などの余分な生年データを消去する関数
+    private string CleanAuthorName(string? rawAuthor)
+    {
+        if (string.IsNullOrWhiteSpace(rawAuthor)) return "不明な著者";
+
+        // カンマ（半角・全角）、後ろの任意のスペース、4桁の数字、ハイフンにマッチする正規表現
+        // 例: ",1965-" や ", 1965-"、"，1965-" などを綺麗に消し去ります
+        string pattern = @"[,，]\s*\d{4}-?";
+        
+        string cleaned = System.Text.RegularExpressions.Regex.Replace(rawAuthor, pattern, "");
+        
+        // 前後の余計な空白をトリミングして返す
+        return cleaned.Trim();
     }
 
     [JSInvokable]
