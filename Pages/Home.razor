@@ -31,9 +31,14 @@
                 <span>
                     シート: 
                     <a href="https://docs.google.com/spreadsheets/d/@targetSpreadsheetId/edit" target="_blank" rel="noopener noreferrer" class="fw-bold text-success text-decoration-underline" style="font-size: 12px;">
-                        スプレッドシートを開く 🔗
+                        BookShelfを開く 🔗
                     </a>
                 </span>
+                
+                <button class="btn btn-outline-success btn-sm fw-bold px-2 py-0 ms-2" @onclick="CreateNewSheetAndSwitch" style="font-size: 11px; border-radius: 4px;">
+                    🔄 新規シート作成
+                </button>
+
                 <span class="badge bg-success bg-opacity-75 text-white fw-bold px-2 py-1" style="border-radius: 4px;">既登録: @registeredIsbns.Count 件</span>
             </div>
         </div>
@@ -258,6 +263,27 @@
         statusMessage = "🚀 Google Driveに新しいスプレッドシートを作成中...";
         StateHasChanged();
         await JSRuntime.InvokeVoidAsync("createNewUserSpreadsheet", dotNetHelper, accessToken);
+    }
+
+    // 🟢 追加：現在の連携をクリアし、即座に新しいスプレッドシートを作成・接続するロジック
+    private async Task CreateNewSheetAndSwitch()
+    {
+        // 1. 現在のメモリ情報を一度クリアし、処理中フラグ（isProcessing）を立てて多重動作を防ぐ
+        isProcessing = true;
+        targetSpreadsheetId = "";
+        hasLinkedSheet = false;
+        scannedBooks.Clear();
+        registeredIsbns.Clear();
+
+        statusMessage = "🔄 古いシートを切り離し、新しい「BookShelf」を作成中...";
+        StateHasChanged();
+
+        // 2. JavaScript側の既存の自動作成ロジックを呼び出す
+        // ※これにより、index.html側で「BookShelf」作成 ➔ 所定カラム（ヘッダー）初期化 ➔ LocalStorageへのID保存まで自動で行われます
+        await JSRuntime.InvokeVoidAsync("createNewUserSpreadsheet", dotNetHelper, accessToken);
+        
+        // 3. 処理中フラグを解除
+        isProcessing = false;
     }
 
     [JSInvokable]
